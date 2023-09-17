@@ -1,0 +1,26 @@
+{
+    "compilerOptions": {
+        "target": "ES2021",
+        "allowJs": true,
+        "module": "commonjs",
+        "skipLibCheck": true,
+        "esModuleInterop": true,
+        "noImplicitAny": true,
+        "outDir": "dist",
+        "moduleResolution": "node",
+        "resolveJsonModule": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "noImplicitReturns": true,
+        "noFallthroughCasesInSwitch": true,
+        "pretty": true,
+        "jsx": "react-jsx",
+        "paths": {
+            "*": ["./node_modules/*"]
+        },
+        "noUncheckedIndexedAccess": true,
+        "strict": true,
+        "exactOptionalPropertyTypes": true
+    },
+    "include": ["src/**/*"]
+}
