@@ -92,4 +92,8 @@ out/
 *.db
 *.db*
 package-lock.json
-./caches
+caches/
+data/
+files/
+dist/
+uploads/
