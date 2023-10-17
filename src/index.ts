@@ -16,6 +16,8 @@ if (cluster.isPrimary) {
 		}
 	});
 
+	require('./database');
+
 	if (process.argv.includes('--no-cluster')) {
 		cluster.fork(process.env);
 	} else {

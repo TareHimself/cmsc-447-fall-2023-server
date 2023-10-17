@@ -199,5 +199,5 @@ app.get('/access/:linkId', async (req, res) => {
 });
 
 app.listen(isDebug ? 9500 : 11000, () => {
-	console.log('Server Online On Port 11000');
+	console.log(`Server Online On Port ${isDebug ? 9500 : 11000}`);
 });
