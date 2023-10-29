@@ -1,120 +1,246 @@
-import Database from 'better-sqlite3';
 import path from 'path';
-import cluster from 'cluster';
 import { v4 as uuidv4 } from 'uuid';
-import { IDatabaseFile, IDatabaseLinks } from './types';
+import { IDatabaseFile, IDatabaseFileInfo, IDatabaseLinks, IDatabasePasswords} from './types';
 import { databasePath } from './constants';
+import { Sequelize, Model, DataTypes } from "sequelize";
+import bcrypt from 'bcrypt';
 
-const db = new Database(path.join(databasePath, 'database'));
+
+const db = new Sequelize({
+	dialect: 'sqlite',
+	storage: path.join(databasePath, 'database')
+});
+
+export class DatabaseFileModel extends Model<IDatabaseFile,IDatabaseFile> {
+
+}
+
+export class DatabaseFileInfoModel extends Model<IDatabaseFileInfo,IDatabaseFileInfo> {
+
+}
+
+
+export class DatabasePasswordsModel extends Model<IDatabasePasswords,IDatabasePasswords> {
+
+}
+
+export class DatabaseLinksModel extends Model<IDatabaseLinks,IDatabaseLinks> {
+
+}
+
+
+
 
 export { db };
 
-db.pragma('journal_mode = WAL');
+db.query("PRAGMA journal_mode=WAL;")
 
-if (cluster.isPrimary) {
-	db.transaction(() => {
-		db.prepare(
-			`CREATE TABLE IF NOT EXISTS files(
-            id TEXT PRIMARY KEY,
-            file_hash TEXT NOT NULL,
-            file_mime TEXT NOT NULL,
-            file_name TEXT NOT NULL
-        ) WITHOUT ROWID`
-		).run();
+DatabaseFileModel.init({
+	id: {
+		type: DataTypes.STRING,
+		primaryKey: true
+	},
+	fileHash: {
+		type: DataTypes.STRING
+	},
+	fileMime: {
+		type: DataTypes.STRING
+	},
+	fileName: {
+		type: DataTypes.STRING
+	},
+	fileSize: {
+		type: DataTypes.FLOAT
+	}
+}, { sequelize: db,tableName: "files", timestamps: false})
 
-		db.prepare(
-			`CREATE TABLE IF NOT EXISTS links(
-            id TEXT PRIMARY KEY,
-            file_id REFERENCES files(id),
-            password TEXT,
-            views INTEGER DEFAULT 0,
-            max_views INTEGER DEFAULT 0,
-            downloads INTEGER DEFAULT 0,
-            expire_at INTEGER DEFAULT 0
-        ) WITHOUT ROWID`
-		).run();
-	}).immediate();
-}
 
-const insertFileStatement = db.prepare<{
-	id: string;
-	file_hash: string;
-	file_mime: string;
-	file_name: string;
-}>('INSERT INTO files VALUES(@id,@file_hash,@file_mime,@file_name)');
+DatabaseFileInfoModel.init({
+	id: {
+		type: DataTypes.STRING,
+		primaryKey: true
+	},
+	file_id: {
+		type: DataTypes.STRING
+	},
+	views: {
+		type: DataTypes.INTEGER
+	},
+	maxViews: {
+		type: DataTypes.INTEGER
+	},
+	downloads: {
+		type: DataTypes.INTEGER
+	},
+	expire_at: {
+		type: DataTypes.DATE,
+		allowNull: true
+	}
+}, { sequelize: db,tableName: "files_info" , timestamps: false})
 
-const getFileStatement = db.prepare<{
-	id: string;
-}>('SELECT * FROM files WHERE id=@id');
 
-const insertLinkStatement = db.prepare<{
-	id: string;
-	file_id: string;
-	password: string | null;
-	views: number;
-	max_views: number;
-	downloads: number;
-	expire_at: number;
-}>(
-	'INSERT INTO links VALUES(@id,@file_id,@password,@views,@max_views,@downloads,@expire_at)'
-);
+DatabasePasswordsModel.init({
+	id: {
+		type: DataTypes.STRING,
+		primaryKey: true
+	},
+	salt: {
+		type: DataTypes.STRING
+	},
+	password: {
+		type: DataTypes.STRING,
+	},
+}, { sequelize: db,tableName: "passwords", timestamps: false})
 
-const getLinkWithIdStatement = db.prepare<{
-	id: string;
-}>(`SELECT * FROM links WHERE id=@id`);
+DatabaseLinksModel.init({
+	id: {
+		type: DataTypes.STRING,
+		primaryKey: true
+	},
+	file_id: {
+		type: DataTypes.STRING
+	},
+	info_id: {
+		type: DataTypes.STRING
+	},
+	createdAt: {
+		type: DataTypes.DATE,
+	}
+}, { sequelize: db,tableName: "links", timestamps: false})
 
-export const createFile = db.transaction(
-	(fileHash: string, fileMime: string, fileName: string) => {
+Promise.all([DatabaseLinksModel.sync(),
+	DatabaseFileInfoModel.sync(),
+	DatabasePasswordsModel.sync(),
+	DatabaseFileModel.sync()])
+
+export async function createFile(fileHash: string, fileMime: string, fileName: string,fileSize: number){
 		const fileId = uuidv4().replaceAll('-', '');
-		insertFileStatement.run({
+		await DatabaseFileModel.create({
 			id: fileId,
-			file_hash: fileHash,
-			file_mime: fileMime,
-			file_name: fileName,
-		});
+			fileHash: fileHash,
+			fileMime: fileMime,
+			fileName: fileName,
+			fileSize: fileSize
+		})
 
 		return fileId;
-	}
-);
+}
 
-export const createFileUrl = db.transaction(
-	(
+export async function createFileInfo(
 		fileId: string,
 		password: string | null,
 		max_views: number,
-		expire_at: number
-	) => {
+		expire_at: string | null
+	){
 		const linkId = uuidv4().replaceAll('-', '');
-		insertLinkStatement.run({
+
+		
+
+		await DatabaseFileInfoModel.create({
 			id: linkId,
 			file_id: fileId,
-			password: password,
 			views: 0,
-			downloads: 0,
-			max_views: max_views,
+			maxViews: max_views,
 			expire_at: expire_at,
-		});
+			downloads: 0,
+		})
 
-		console.log(linkId);
+		if(password !== null){
+			const salt = await bcrypt.genSalt();
+
+			const hashedPassword = await bcrypt.hash(password,salt!);
+
+			await DatabasePasswordsModel.create({
+				id: linkId,
+				salt: salt,
+				password: hashedPassword
+			})
+		}
 
 		return linkId;
-	}
-);
+}
 
-export const accessLink = db.transaction((linkId: string) => {
-	const targetLink = getLinkWithIdStatement.all({
+export async function checkPassword(infoId: string, password: string | null){
+
+
+	const passwordInfo = await DatabasePasswordsModel.findByPk(infoId).then(c => c?.get({ plain: true }))
+
+
+	if(passwordInfo === undefined && password == null){
+		return true
+	}
+		
+	const hashedPassword = await bcrypt.hash(password!,passwordInfo!.salt);
+
+	console.log(passwordInfo,hashedPassword)
+	return passwordInfo?.password === hashedPassword;
+}
+
+export async function createDownloadUrlForFile(
+	fileInfoId: string,
+	password: string | null,
+){
+	const linkId = uuidv4().replaceAll('-', '');
+
+	const fileInfo = await DatabaseFileInfoModel.findByPk(fileInfoId).then(c => c?.get({ plain: true}));
+
+	if(!fileInfo){
+		throw new Error("File does not exist")
+	}
+
+	if(await checkPassword(fileInfoId,password).then(c => !c)){
+		throw new Error("Incorrect Password")
+	}
+
+	await DatabaseLinksModel.create({
 		id: linkId,
-	})[0] as IDatabaseLinks | undefined;
-	// console.log(db.prepare('SELECT * FROM links').all());
-	if (!targetLink) {
-		return undefined;
+		file_id: fileInfo.file_id,
+		info_id: fileInfo.id,
+		createdAt: new Date().toUTCString()
+	})
+
+	return linkId;
+}
+
+export async function accessFileInfo(infoId: string,password: string | null){
+	const data = await DatabaseFileInfoModel.findByPk(infoId).then(c => c?.get({plain: true}))
+	
+	if(!data){
+		throw new Error(`Upload does not exist`)
 	}
 
-	return targetLink;
-});
+	if(await checkPassword(infoId,password)){
 
-export function getFileData(fileId: string) {
-	return getFileStatement.all({
-		id: fileId,
-	})[0] as IDatabaseFile | undefined;
+		await DatabaseFileInfoModel.update({
+			views: data.views + 1
+		},{
+			where: {
+				id: data.id
+			}
+		})
+
+		return await DatabaseFileInfoModel.findByPk(infoId).then(c => c?.get({ plain: true}));
+	}
+
+	throw new Error("Incorrect Password")
+}
+
+export async function getFileData(fileId: string){
+	return await DatabaseFileModel.findByPk(fileId).then(c => c?.get({plain: true}))
+}
+
+export async function getDownloadInfo(downloadId: string){
+	const downloadInfo = await DatabaseLinksModel.findByPk(downloadId).then(c => c?.get({plain: true}))
+	if(!downloadInfo){
+		throw new Error("Link does not exist")
+	}
+
+
+	const fileInfo = await DatabaseFileModel.findByPk(downloadInfo.file_id).then(c => c?.get({plain: true}))
+
+	if(!fileInfo){
+		throw new Error("File does not exist")
+	}
+
+	return fileInfo
 }

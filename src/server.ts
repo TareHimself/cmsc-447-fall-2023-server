@@ -3,47 +3,34 @@ import multer from 'multer';
 import crypto from 'crypto';
 import * as fs from 'fs';
 import path from 'path';
-import bcrypt from 'bcrypt';
+
 import {
-	accessLink,
 	createFile,
-	createFileUrl,
+	createFileInfo,
 	getFileData,
-	db,
+	accessFileInfo,
+	createDownloadUrlForFile,
+	getDownloadInfo,
+	DatabaseFileInfoModel,
 } from './database';
-import { builResponse } from './utils';
-import { IDatabaseFile, IDatabaseLinks } from './types';
+import { builResponse} from './utils';
 import { filesPath, isDebug } from './constants';
+
 const serverAddress = isDebug
 	? 'http://localhost:9500/'
 	: 'https://447-api.oyintare.dev/';
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
-app.get('/', (_req, res) => {
+app.get('/', async (_req, res) => {
+
 	res.send(
 		builResponse(
 			{
 				name: 'CMSC 447 FileCher Server',
-				files: (
-					db.prepare('SELECT * FROM files').all() as IDatabaseFile[]
-				).map((a) => {
+				files: (await DatabaseFileInfoModel.findAll()).map(async (a) => {
 					return {
-						...a,
-						links: (
-							db
-								.prepare(
-									'SELECT * FROM links WHERE file_id=@id'
-								)
-								.all({
-									id: a.id,
-								}) as IDatabaseLinks[]
-						).map((c) => {
-							return {
-								...c,
-								url: serverAddress + 'info/' + c.id,
-							};
-						}),
+						...a.dataValues,
 					};
 				}),
 			},
@@ -73,29 +60,26 @@ app.put('/upload', upload.single('file'), async (req, res) => {
 		});
 
 		const formData = req.body;
-		const password = formData['password']
-			? await bcrypt.hash(
-					formData['password'],
-					formData['password'].length
-			  )
-			: null;
+
+		const password = formData['password'] || null
+
 		const maxViews = formData['maxViews']
 			? parseInt(formData['maxViews'])
 			: 0;
-		const expireAt = formData['expire'] ? parseInt(formData['expire']) : 0;
 
-		const fileId = createFile(fileHash, file.mimetype, file.originalname);
+		const expireAt = formData['expire'] ? new Date(formData['expire']).toUTCString() : null;
 
-		const urlId = createFileUrl(fileId, password, maxViews, expireAt);
+		const fileId = await createFile(fileHash, file.mimetype, file.originalname,file.size);
+
+		const fileInfoId = await createFileInfo(fileId, password, maxViews, expireAt);
 
 		await fs.promises.rename(file.path, path.join(filesPath, fileHash));
 
 		res.send(
 			builResponse(
 				{
-					id: urlId,
-					url: serverAddress + `info/${urlId}`,
-					hash: fileHash,
+					...(await getFileData(fileId))!,
+					id: fileInfoId,
 				},
 				false
 			)
@@ -111,31 +95,35 @@ app.put('/upload', upload.single('file'), async (req, res) => {
 	}
 });
 
-app.get('/info/:linkId', async (req, res) => {
+app.get('/access/:infoId', async (req, res) => {
 	try {
-		const linkId = req.params.linkId;
+		const infoId = req.params.infoId;
 
-		const linkData = accessLink(linkId);
+		let password: string | null = req.query.password as (string | undefined) ?? null;
 
-		if (!linkData) {
-			throw new Error(`Link Does Not Exist ${linkId}`);
+		const infoData = await accessFileInfo(infoId,password);
+
+		if (!infoData) {
+			throw new Error(`Link Does Not Exist ${infoId}`);
 		}
 
-		const fileData = getFileData(linkData.file_id);
+		const fileData = await getFileData(infoData.file_id)
 
 		if (!fileData) {
 			throw new Error('File Does Not Exist');
 		}
+
+		const downloadUrlId = await createDownloadUrlForFile(infoData.id,password);
 
 		res.send(
 			builResponse(
 				{
-					filename: fileData.file_name,
-					mime: fileData.file_mime,
-					views: linkData.views,
-					downloads: linkData.downloads,
-					expire_at: linkData.expire_at,
-					access_url: serverAddress + `access/${linkId}`,
+					filename: fileData.fileName,
+					mime: fileData.fileMime,
+					views: infoData.views,
+					downloads: infoData.downloads,
+					expire_at: infoData.expire_at,
+					url: serverAddress + `download/${downloadUrlId}`,
 				},
 				false
 			)
@@ -151,21 +139,11 @@ app.get('/info/:linkId', async (req, res) => {
 	}
 });
 
-app.get('/access/:linkId', async (req, res) => {
+app.get('/download/:downloadId', async (req, res) => {
 	try {
-		const linkId = req.params.linkId;
+		const downloadId = req.params.downloadId;
 
-		const linkData = accessLink(linkId);
-
-		if (!linkData) {
-			throw new Error(`Link Does Not Exist ${linkId}`);
-		}
-
-		const fileData = getFileData(linkData.file_id);
-
-		if (!fileData) {
-			throw new Error('File Does Not Exist');
-		}
+		const fileData = await getDownloadInfo(downloadId)
 
 		// const ranges =
 		// 	req.headers.range
@@ -177,8 +155,10 @@ app.get('/access/:linkId', async (req, res) => {
 		// 			return t;
 		// 		}, [] as number[]) ?? [];
 
-		res.contentType(fileData.file_mime);
-		res.sendFile(path.resolve(path.join(filesPath, fileData.file_hash)));
+		
+
+		res.contentType(fileData.fileMime);
+		res.sendFile(path.resolve(path.join(filesPath, fileData.fileHash)));
 		// const fileStream = fs.createReadStream(
 		// 	path.resolve(path.join('files', fileData.file_hash))
 		// 	// {

@@ -1,16 +1,29 @@
 export interface IDatabaseFile {
 	id: string;
-	file_hash: string;
-	file_mime: string;
-	file_name: string;
+	fileHash: string;
+	fileMime: string;
+	fileName: string;
+	fileSize: number;
+}
+
+export interface IDatabasePasswords {
+	id: string;
+	salt: string;
+	password: string;
+}
+
+export interface IDatabaseFileInfo {
+	id: string;
+	file_id: string;
+	views: number;
+	maxViews: number;
+	downloads: number;
+	expire_at: string | null;
 }
 
 export interface IDatabaseLinks {
 	id: string;
 	file_id: string;
-	password: string | null;
-	views: string;
-	max_views: string;
-	downloads: string;
-	expire_at: string;
+	info_id: string;
+	createdAt: string;
 }
