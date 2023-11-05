@@ -3,7 +3,7 @@ import multer from 'multer';
 import crypto from 'crypto';
 import * as fs from 'fs';
 import path from 'path';
-
+import cors from 'cors'
 import {
 	createFile,
 	createFileInfo,
@@ -21,6 +21,7 @@ const serverAddress = isDebug
 	: 'https://447-api.oyintare.dev/';
 const app = express();
 const upload = multer({ dest: 'uploads/' });
+app.use(cors())
 
 app.get('/', async (_req, res) => {
 
@@ -28,9 +29,9 @@ app.get('/', async (_req, res) => {
 		builResponse(
 			{
 				name: 'CMSC 447 FileCher Server',
-				files: (await DatabaseFileInfoModel.findAll()).map(async (a) => {
+				files: (await DatabaseFileInfoModel.findAll()).map((a) => {
 					return {
-						...a.dataValues,
+						...a.get({ plain: true}),
 					};
 				}),
 			},
@@ -120,6 +121,7 @@ app.get('/access/:infoId', async (req, res) => {
 				{
 					filename: fileData.fileName,
 					mime: fileData.fileMime,
+					size: fileData.fileSize,
 					views: infoData.views,
 					downloads: infoData.downloads,
 					expire_at: infoData.expire_at,
@@ -158,6 +160,7 @@ app.get('/download/:downloadId', async (req, res) => {
 		
 
 		res.contentType(fileData.fileMime);
+		res.set('Content-Disposition', `attachment; filename="${fileData.fileName}"`);
 		res.sendFile(path.resolve(path.join(filesPath, fileData.fileHash)));
 		// const fileStream = fs.createReadStream(
 		// 	path.resolve(path.join('files', fileData.file_hash))
