@@ -14,16 +14,16 @@ export interface IDatabasePasswords {
 
 export interface IDatabaseFileInfo {
 	id: string;
-	file_id: string;
+	fileId: string;
 	views: number;
 	maxViews: number;
 	downloads: number;
-	expire_at: string | null;
+	expireAt: string | null;
 }
 
 export interface IDatabaseLinks {
 	id: string;
-	file_id: string;
-	info_id: string;
+	fileId: string;
+	infoId: string;
 	createdAt: string;
 }

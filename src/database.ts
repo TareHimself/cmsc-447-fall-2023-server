@@ -60,7 +60,7 @@ DatabaseFileInfoModel.init({
 		type: DataTypes.STRING,
 		primaryKey: true
 	},
-	file_id: {
+	fileId: {
 		type: DataTypes.STRING
 	},
 	views: {
@@ -72,7 +72,7 @@ DatabaseFileInfoModel.init({
 	downloads: {
 		type: DataTypes.INTEGER
 	},
-	expire_at: {
+	expireAt: {
 		type: DataTypes.DATE,
 		allowNull: true
 	}
@@ -97,10 +97,10 @@ DatabaseLinksModel.init({
 		type: DataTypes.STRING,
 		primaryKey: true
 	},
-	file_id: {
+	fileId: {
 		type: DataTypes.STRING
 	},
-	info_id: {
+	infoId: {
 		type: DataTypes.STRING
 	},
 	createdAt: {
@@ -138,10 +138,10 @@ export async function createFileInfo(
 
 		await DatabaseFileInfoModel.create({
 			id: linkId,
-			file_id: fileId,
+			fileId: fileId,
 			views: 0,
 			maxViews: max_views,
-			expire_at: expire_at,
+			expireAt: expire_at,
 			downloads: 0,
 		})
 
@@ -194,8 +194,8 @@ export async function createDownloadUrlForFile(
 
 	await DatabaseLinksModel.create({
 		id: linkId,
-		file_id: fileInfo.file_id,
-		info_id: fileInfo.id,
+		fileId: fileInfo.fileId,
+		infoId: fileInfo.id,
 		createdAt: new Date().toUTCString()
 	})
 
@@ -236,7 +236,7 @@ export async function getDownloadInfo(downloadId: string){
 	}
 
 
-	const fileInfo = await DatabaseFileModel.findByPk(downloadInfo.file_id).then(c => c?.get({plain: true}))
+	const fileInfo = await DatabaseFileModel.findByPk(downloadInfo.fileId).then(c => c?.get({plain: true}))
 
 	if(!fileInfo){
 		throw new Error("File does not exist")

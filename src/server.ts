@@ -108,7 +108,7 @@ app.get('/access/:infoId', async (req, res) => {
 			throw new Error(`Link Does Not Exist ${infoId}`);
 		}
 
-		const fileData = await getFileData(infoData.file_id)
+		const fileData = await getFileData(infoData.fileId)
 
 		if (!fileData) {
 			throw new Error('File Does Not Exist');
@@ -124,7 +124,7 @@ app.get('/access/:infoId', async (req, res) => {
 					size: fileData.fileSize,
 					views: infoData.views,
 					downloads: infoData.downloads,
-					expire_at: infoData.expire_at,
+					expireAt: infoData.expireAt,
 					url: serverAddress + `download/${downloadUrlId}`,
 				},
 				false
