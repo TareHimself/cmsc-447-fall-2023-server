@@ -8,6 +8,8 @@
     "build": "npm run clean && npx tsc",
     "watch": "npm run build && tsc-watch",
     "pretty": "npx prettier --write **/*.ts",
+    "docker:run": "docker run -p 11000:11000 --name cmsc-447-fall-2023-server tarehimself/cmsc-447-fall-2023-server",
+    "docker:build": "docker build -f Dockerfile . -t tarehimself/cmsc-447-fall-2023-server",
     "clean": "node ./scripts/clean.js",
     "debug": "node ./dist/index.js --debug --no-cluster"
   },
