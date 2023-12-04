@@ -68,8 +68,10 @@ app.put('/upload', upload.single('file'), async (req, res) => {
 			? parseInt(formData['maxViews'])
 			: 0;
 
-		const expireAt = formData['expire'] ? new Date(formData['expire']).toUTCString() : null;
+		
+		const expireAt = formData['expire'] && formData['expire'].trim() ? new Date(formData['expire']).toUTCString() : null;
 
+		console.log("Expire date",expireAt,formData['expire'])
 		const fileId = await createFile(fileHash, file.mimetype, file.originalname,file.size);
 
 		const fileInfoId = await createFileInfo(fileId, password, maxViews, expireAt);
@@ -107,6 +109,7 @@ app.get('/access/:infoId', async (req, res) => {
 		if (!infoData) {
 			throw new Error(`Link Does Not Exist ${infoId}`);
 		}
+		
 
 		const fileData = await getFileData(infoData.fileId)
 
