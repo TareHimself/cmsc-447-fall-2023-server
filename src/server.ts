@@ -3,7 +3,8 @@ import multer from 'multer';
 import crypto from 'crypto';
 import * as fs from 'fs';
 import path from 'path';
-import cors from 'cors'
+//import cors from 'cors'
+import { v4 as uuidv4 } from 'uuid';
 import {
 	createFile,
 	createFileInfo,
@@ -20,37 +21,40 @@ const serverAddress = isDebug
 	? 'http://localhost:9500/'
 	: 'https://447-api.oyintare.dev/';
 const app = express();
-const upload = multer({ dest: 'uploads/' });
-app.use(cors())
+const upload = multer({ storage: multer.memoryStorage(), limits : {
+	fieldSize: 2e+8,
+	fieldNameSize: 2e+8,
+} });
+// app.use(cors({
+// 	origin: "*"
+// }))
+app.use(express.json({ limit: "10000mb"}))
+app.use(express.urlencoded({ extended: true,limit: "10000mb"}))
 
-app.get('/', async (_req, res) => {
-
-	res.send(
-		builResponse(
-			{
-				name: 'CMSC 447 FileCher Server',
-				files: (await DatabaseFileInfoModel.findAll()).map((a) => {
-					return {
-						...a.get({ plain: true}),
-					};
-				}),
-			},
-			false
-		)
-	);
-});
+app.use((_req, res, next) => {
+	res.header("Access-Control-Allow-Origin", "*");
+	res.header("Access-Control-Allow-Methods","*")
+	res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+	next();
+  });
 
 app.put('/upload', upload.single('file'), async (req, res) => {
+	req.setTimeout(2047483647)
 	try {
 		const file = req.file;
+		
 		if (!file) {
 			throw new Error('Missing File');
 		}
 
+		const tempPath = path.join(filesPath, `temp_${uuidv4().replaceAll('-','')}`)
+
+		await fs.promises.writeFile(tempPath,file.buffer);
+
 		const fileHash = await new Promise<string>((res) => {
 			const hash = crypto.createHash('sha256');
 
-			const stream = fs.createReadStream(file.path);
+			const stream = fs.createReadStream(tempPath);
 			stream.on('data', (d) => {
 				hash.update(d);
 			});
@@ -76,7 +80,7 @@ app.put('/upload', upload.single('file'), async (req, res) => {
 
 		const fileInfoId = await createFileInfo(fileId, password, maxViews, expireAt);
 
-		await fs.promises.rename(file.path, path.join(filesPath, fileHash));
+		await fs.promises.rename(tempPath, path.join(filesPath, fileHash));
 
 		res.send(
 			builResponse(
