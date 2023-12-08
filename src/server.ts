@@ -12,7 +12,6 @@ import {
 	accessFileInfo,
 	createDownloadUrlForFile,
 	getDownloadInfo,
-	DatabaseFileInfoModel,
 } from './database';
 import { builResponse} from './utils';
 import { filesPath, isDebug } from './constants';
